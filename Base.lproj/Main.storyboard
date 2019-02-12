@@ -22,6 +22,11 @@
                                 <rect key="frame" x="0.0" y="44" width="375" height="44"/>
                                 <items>
                                     <navigationItem title="Lap Times" id="brv-Ey-aeX">
+                                        <barButtonItem key="leftBarButtonItem" title="Refresh" id="O8e-E9-ql4">
+                                            <connections>
+                                                <action selector="reloadDataButton:" destination="BYZ-38-t0r" id="sHz-ha-nPG"/>
+                                            </connections>
+                                        </barButtonItem>
                                         <barButtonItem key="rightBarButtonItem" style="plain" id="4tU-C7-gpB">
                                             <button key="customView" opaque="NO" contentMode="scaleToFill" contentHorizontalAlignment="center" contentVerticalAlignment="center" buttonType="roundedRect" lineBreakMode="middleTruncation" id="Bd0-OY-ffO">
                                                 <rect key="frame" x="276" y="7" width="83" height="30"/>

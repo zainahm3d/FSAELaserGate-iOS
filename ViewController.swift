@@ -79,6 +79,7 @@ class ViewController: UIViewController, UITableViewDelegate, UITableViewDataSour
                 self.lapTimeCharacteristic = characteristic
                 self.peripheral.setNotifyValue(true, for: characteristic)
                 navBar.topItem?.title = "Lap Times"
+                requestTime()
             }
         }
     }
@@ -120,6 +121,11 @@ class ViewController: UIViewController, UITableViewDelegate, UITableViewDataSour
 
     func peripheral(_ peripheral: CBPeripheral, didUpdateValueFor descriptor: CBDescriptor, error: Error?) {
         print("value updated successfully")
+    }
+
+    public func requestTime() {
+        let requestData: Data? = "request".data(using: .utf8) // Proudly stolen from objc.io
+        self.peripheral.writeValue(requestData!, for: self.lapTimeCharacteristic, type: CBCharacteristicWriteType.withResponse)
     }
     // ---------- /BLUETOOTH ----------
 
@@ -171,4 +177,11 @@ class ViewController: UIViewController, UITableViewDelegate, UITableViewDataSour
 
         self.present(dialog, animated: true, completion: nil)
     }
+
+    // Manual data reload
+    @IBAction func reloadDataButton(_ sender: Any) {
+        print("refreshing")
+        requestTime()
+    }
+
 }
