@@ -17,27 +17,31 @@ class ViewController: UIViewController, UITableViewDelegate, UITableViewDataSour
     var list = ["No Data"]
 
 
-// ---------- BLUETOOTH ----------
+    // ---------- BLUETOOTH ----------
 
     let serviceUUID = CBUUID(string: "0a197167-38cd-40a6-8e08-cc637b93b8ce")
     let characteristicUUID = CBUUID(string: "676e0287-815e-4f6f-b18a-64bcae972e90")
 
+    var manager: CBCentralManager!
     var mainService: CBService! = nil
     var peripheral: CBPeripheral!
 
     func centralManagerDidUpdateState(_ central: CBCentralManager) {
         if central.state == CBManagerState.poweredOn {
-            central.scanForPeripherals(withServices: [serviceUUID], options: nil)
+            central.scanForPeripherals(withServices: nil, options: nil)
+            print("scanning")
         } else {
             print("bluetooth not available")
         }
     }
 
     func centralManager(_ central: CBCentralManager, didDiscover peripheral: CBPeripheral, advertisementData: [String : Any], rssi RSSI: NSNumber) {
-            print("gate timer found")
+        if peripheral.name == "FSAE Gate Timer" {
             self.peripheral = peripheral
-            central.connect(self.peripheral, options: nil)
+            central.connect(peripheral, options: nil)
             central.stopScan()
+            print("gate timer found")
+        }
     }
 
     func centralManager(_ central: CBCentralManager, didConnect peripheral: CBPeripheral) {
@@ -58,7 +62,7 @@ class ViewController: UIViewController, UITableViewDelegate, UITableViewDataSour
             if service.uuid == serviceUUID {
                 print("found uuid")
                 mainService = service
-                peripheral.discoverCharacteristics([characteristicUUID], for: mainService)
+                peripheral.discoverCharacteristics([characteristicUUID], for: service)
             }
         }
 
@@ -68,16 +72,35 @@ class ViewController: UIViewController, UITableViewDelegate, UITableViewDataSour
         print("characteristics discovered")
 
         for characteristic in service.characteristics! {
+            if characteristic.uuid == characteristicUUID {
             self.peripheral.setNotifyValue(true, for: characteristic)
-            print(characteristic.value as Any)
+            }
         }
     }
 
 
+    // Every time the ESP32 notifies of new data, this func is fired
     func peripheral(_ peripheral: CBPeripheral, didUpdateValueFor characteristic: CBCharacteristic, error: Error?) {
-        print(characteristic.value?.hexEncodedString() as Any)
+        let asciiString = String(data: characteristic.value!, encoding: String.Encoding.ascii)
+        let num = Double(asciiString!)
+        print(num as Any)
+
+
+        if list[0] == "No Data"{ //get rid of no data placeholder
+            list = []
+        }
+
+        let numString = String(format: "%.2f", num!)
+        list.append(numString)
+        self.TableView.reloadData()
     }
-// ---------- /BLUETOOTH ----------
+
+    func centralManager(_ central: CBCentralManager, didDisconnectPeripheral peripheral: CBPeripheral, error: Error?) {
+        central.scanForPeripherals(withServices: nil, options: nil)
+        print("Disconnected, now scanning again")
+    }
+
+    // ---------- /BLUETOOTH ----------
 
 
     func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
@@ -96,6 +119,7 @@ class ViewController: UIViewController, UITableViewDelegate, UITableViewDataSour
 
     override func viewDidLoad() {
         super.viewDidLoad()
+        manager = CBCentralManager(delegate: self, queue: nil)
     }
 
     override func viewDidAppear(_ animated: Bool) {
@@ -105,17 +129,5 @@ class ViewController: UIViewController, UITableViewDelegate, UITableViewDataSour
     @IBAction func clearButton(_ sender: Any) {
         list = []
         self.TableView.reloadData()
-    }
-}
-
-extension Data {
-    struct HexEncodingOptions: OptionSet {
-        let rawValue: Int
-        static let upperCase = HexEncodingOptions(rawValue: 1 << 0)
-    }
-
-    func hexEncodedString(options: HexEncodingOptions = []) -> String {
-        let format = options.contains(.upperCase) ? "%02hhX" : "%02hhx"
-        return map { String(format: format, $0) }.joined()
     }
 }
