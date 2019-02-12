@@ -14,7 +14,8 @@ class ViewController: UIViewController, UITableViewDelegate, UITableViewDataSour
     @IBOutlet weak var navBar: UINavigationBar!
     @IBOutlet weak var TableView: UITableView!
 
-    var list = ["No Data"]
+    var list: [String] = []
+    var tempList: [String] = []
 
 
     // ---------- BLUETOOTH ----------
@@ -25,10 +26,12 @@ class ViewController: UIViewController, UITableViewDelegate, UITableViewDataSour
     var manager: CBCentralManager!
     var mainService: CBService! = nil
     var peripheral: CBPeripheral!
+    var lapTimeCharacteristic: CBCharacteristic! = nil
 
     func centralManagerDidUpdateState(_ central: CBCentralManager) {
         if central.state == CBManagerState.poweredOn {
             central.scanForPeripherals(withServices: nil, options: nil)
+            navBar.topItem?.title = "Searching..."
             print("scanning")
         } else {
             print("bluetooth not available")
@@ -73,33 +76,51 @@ class ViewController: UIViewController, UITableViewDelegate, UITableViewDataSour
 
         for characteristic in service.characteristics! {
             if characteristic.uuid == characteristicUUID {
-            self.peripheral.setNotifyValue(true, for: characteristic)
+                self.lapTimeCharacteristic = characteristic
+                self.peripheral.setNotifyValue(true, for: characteristic)
+                navBar.topItem?.title = "Lap Times"
             }
         }
     }
 
 
+    var hadZero = false
     // Every time the ESP32 notifies of new data, this func is fired
     func peripheral(_ peripheral: CBPeripheral, didUpdateValueFor characteristic: CBCharacteristic, error: Error?) {
         let asciiString = String(data: characteristic.value!, encoding: String.Encoding.ascii)
         let num = Double(asciiString!)
         print(num as Any)
 
-
-        if list[0] == "No Data"{ //get rid of no data placeholder
-            list = []
+        if hadZero {
+            list.removeAll()
+            tempList.removeAll()
+            hadZero = false
         }
 
         let numString = String(format: "%.2f", num!)
-        list.append(numString)
-        self.TableView.reloadData()
+
+        if num != 0.00 {
+            //        list.append(numString)
+            tempList.append(numString)
+            //        TableView.reloadData()
+        }
+
+        if num == 0.00 {
+            hadZero = true
+            list = tempList
+            TableView.reloadData()
+        }
     }
 
     func centralManager(_ central: CBCentralManager, didDisconnectPeripheral peripheral: CBPeripheral, error: Error?) {
         central.scanForPeripherals(withServices: nil, options: nil)
         print("Disconnected, now scanning again")
+        navBar.topItem?.title = "Searching..."
     }
 
+    func peripheral(_ peripheral: CBPeripheral, didUpdateValueFor descriptor: CBDescriptor, error: Error?) {
+        print("value updated successfully")
+    }
     // ---------- /BLUETOOTH ----------
 
 
@@ -109,10 +130,12 @@ class ViewController: UIViewController, UITableViewDelegate, UITableViewDataSour
 
     func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
         let cell = UITableViewCell(style: .default, reuseIdentifier: "cell")
-        cell.textLabel?.text = list[indexPath.row]
-        cell.textLabel?.font = UIFont(name: (cell.textLabel?.font.fontName)!, size: 30)
-        cell.textLabel?.textAlignment = .center
-        cell.isUserInteractionEnabled = false
+        if indexPath.row < list.count {
+            cell.textLabel?.text = list.reversed()[indexPath.row] //latest values auto pushed to top
+            cell.textLabel?.font = UIFont(name: (cell.textLabel?.font.fontName)!, size: 30)
+            cell.textLabel?.textAlignment = .center
+            cell.isUserInteractionEnabled = false
+        }
         return cell
     }
 
@@ -120,14 +143,32 @@ class ViewController: UIViewController, UITableViewDelegate, UITableViewDataSour
     override func viewDidLoad() {
         super.viewDidLoad()
         manager = CBCentralManager(delegate: self, queue: nil)
+        navBar.topItem?.title = "Searching..."
     }
 
     override func viewDidAppear(_ animated: Bool) {
         navBar.sizeToFit()
     }
 
+
+    //Sends clear command to ESP32 over the BLE Characteristic
     @IBAction func clearButton(_ sender: Any) {
-        list = []
-        self.TableView.reloadData()
+
+        let dialog = UIAlertController(title: "Delete Data?", message: "This will remove all current laptimes from the timer device", preferredStyle: .alert)
+
+        let delete = UIAlertAction(title: "Delete", style: .destructive, handler: { (action) -> Void in
+            let clear: Data? = "clear".data(using: .utf8) // Proudly stolen from objc.io
+            self.list = []
+            self.TableView.reloadData()
+            self.peripheral.writeValue(clear!, for: self.lapTimeCharacteristic, type: CBCharacteristicWriteType.withResponse)
+        })
+
+        let cancel = UIAlertAction(title: "Cancel", style: .cancel) { (action) -> Void in
+        }
+
+        dialog.addAction(delete)
+        dialog.addAction(cancel)
+
+        self.present(dialog, animated: true, completion: nil)
     }
 }
