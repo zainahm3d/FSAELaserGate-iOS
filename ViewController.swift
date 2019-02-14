@@ -11,6 +11,8 @@ import CoreBluetooth
 
 class ViewController: UIViewController, UITableViewDelegate, UITableViewDataSource, CBCentralManagerDelegate, CBPeripheralDelegate {
 
+    var connected = false
+
     @IBOutlet weak var navBar: UINavigationBar!
     @IBOutlet weak var TableView: UITableView!
 
@@ -79,6 +81,7 @@ class ViewController: UIViewController, UITableViewDelegate, UITableViewDataSour
                 self.lapTimeCharacteristic = characteristic
                 self.peripheral.setNotifyValue(true, for: characteristic)
                 navBar.topItem?.title = "Lap Times"
+                connected = true
                 requestTime()
             }
         }
@@ -115,6 +118,7 @@ class ViewController: UIViewController, UITableViewDelegate, UITableViewDataSour
 
     func centralManager(_ central: CBCentralManager, didDisconnectPeripheral peripheral: CBPeripheral, error: Error?) {
         central.scanForPeripherals(withServices: nil, options: nil)
+        connected = false
         print("Disconnected, now scanning again")
         navBar.topItem?.title = "Searching..."
     }
@@ -160,28 +164,33 @@ class ViewController: UIViewController, UITableViewDelegate, UITableViewDataSour
     //Sends clear command to ESP32 over the BLE Characteristic
     @IBAction func clearButton(_ sender: Any) {
 
-        let dialog = UIAlertController(title: "Delete Data?", message: "This will remove all current laptimes from the timer device", preferredStyle: .alert)
+        if connected {
 
-        let delete = UIAlertAction(title: "Delete", style: .destructive, handler: { (action) -> Void in
-            let clear: Data? = "clear".data(using: .utf8) // Proudly stolen from objc.io
-            self.list = []
-            self.TableView.reloadData()
-            self.peripheral.writeValue(clear!, for: self.lapTimeCharacteristic, type: CBCharacteristicWriteType.withResponse)
-        })
+            let dialog = UIAlertController(title: "Delete Data?", message: "This will remove all current laptimes from the timer device", preferredStyle: .alert)
 
-        let cancel = UIAlertAction(title: "Cancel", style: .cancel) { (action) -> Void in
+            let delete = UIAlertAction(title: "Delete", style: .destructive, handler: { (action) -> Void in
+                let clear: Data? = "clear".data(using: .utf8) // Proudly stolen from objc.io
+                self.list = []
+                self.TableView.reloadData()
+                self.peripheral.writeValue(clear!, for: self.lapTimeCharacteristic, type: CBCharacteristicWriteType.withResponse)
+            })
+
+            let cancel = UIAlertAction(title: "Cancel", style: .cancel) { (action) -> Void in
+            }
+
+            dialog.addAction(delete)
+            dialog.addAction(cancel)
+
+            self.present(dialog, animated: true, completion: nil)
         }
-
-        dialog.addAction(delete)
-        dialog.addAction(cancel)
-
-        self.present(dialog, animated: true, completion: nil)
     }
 
     // Manual data reload
     @IBAction func reloadDataButton(_ sender: Any) {
-        print("refreshing")
-        requestTime()
+        if connected {
+            print("refreshing")
+            requestTime()
+        }
     }
 
 }
